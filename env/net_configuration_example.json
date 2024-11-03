@@ -1,0 +1,38 @@
+{
+    "devices": {
+        "a": {
+            "device_type": "switch",
+            "memory_limit": 50,
+            "connections": ["1", "2"]
+        },
+        "b": {
+            "device_type": "switch",
+            "memory_limit": 30,
+            "connections": ["3"]
+        },
+        "c": {
+            "device_type": "worker",
+            "packet_processing_speed": 10
+        }
+    },
+    "connections": {
+        "1": {
+            "from": "a", "to": "b",
+            "data": {
+                "connectuin_bandwidth": 15
+            }
+        },
+        "2": {
+            "from": "a", "to": "c",
+            "data": {
+                "connectuin_bandwidth": 5
+            }
+        },
+        "3": {
+            "from": "b", "to": "c",
+            "data": {
+                "connectuin_bandwidth": 15
+            }
+        }
+    }
+}
