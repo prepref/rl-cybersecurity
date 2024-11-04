@@ -42,13 +42,14 @@ class Network:
         self.used_ips = set()
 
     def _get_random_ip(self, count: int):
-        ip_addesses = []
-        while len(ip_addesses) < count:
+        ip_addresses = []
+        while len(ip_addresses) < count:
             ip = f'10.0.0.{random.randint(0,255)}'
             if ip not in self.used_ips:
-                ip_addesses.append(ip)
+                self.used_ips.add(ip)
+                ip_addresses.append(ip)
 
-        return ip_addesses
+        return ip_addresses
 
     def _generate_devices(self):
         routers = []
