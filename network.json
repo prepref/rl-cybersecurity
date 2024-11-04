@@ -1,0 +1,114 @@
+{
+    "devices_id": {
+        "0": {
+            "name": "Router0",
+            "device_type": "router",
+            "ports": {
+                "port0": "10.0.0.92",
+                "port1": "10.0.0.153",
+                "port2": "10.0.0.49",
+                "port3": "10.0.0.146"
+            },
+            "connections": {
+                "port0": 1,
+                "port1": 3
+            }
+        },
+        "1": {
+            "name": "Router1",
+            "device_type": "router",
+            "ports": {
+                "port0": "10.0.0.177",
+                "port1": "10.0.0.189",
+                "port2": "10.0.0.132",
+                "port3": "10.0.0.150"
+            },
+            "connections": {
+                "port0": 2,
+                "port1": 0
+            }
+        },
+        "2": {
+            "name": "Router2",
+            "device_type": "router",
+            "ports": {
+                "port0": "10.0.0.32",
+                "port1": "10.0.0.117",
+                "port2": "10.0.0.106",
+                "port3": "10.0.0.197"
+            },
+            "connections": {
+                "port0": 3,
+                "port1": 1
+            }
+        },
+        "3": {
+            "name": "Router3",
+            "device_type": "router",
+            "ports": {
+                "port0": "10.0.0.224",
+                "port1": "10.0.0.86",
+                "port2": "10.0.0.213",
+                "port3": "10.0.0.205"
+            },
+            "connections": {
+                "port0": 0,
+                "port1": 2
+            }
+        },
+        "4": {
+            "name": "Switch4",
+            "device_type": "switch",
+            "ports": {
+                "port0": "10.0.0.64",
+                "port1": "10.0.0.94"
+            },
+            "connections": {
+                "port0": 0
+            }
+        },
+        "5": {
+            "name": "Switch5",
+            "device_type": "switch",
+            "ports": {
+                "port0": "10.0.0.141",
+                "port1": "10.0.0.246"
+            },
+            "connections": {
+                "port0": 1
+            }
+        },
+        "6": {
+            "name": "Server6",
+            "device_type": "server",
+            "ports": {
+                "port0": "10.0.0.233",
+                "port1": "10.0.0.114",
+                "port2": "10.0.0.115"
+            },
+            "connections": {
+                "port0": 4
+            }
+        },
+        "7": {
+            "name": "Server7",
+            "device_type": "server",
+            "ports": {
+                "port0": "10.0.0.130",
+                "port1": "10.0.0.79",
+                "port2": "10.0.0.1"
+            },
+            "connections": null
+        },
+        "8": {
+            "name": "Server8",
+            "device_type": "server",
+            "ports": {
+                "port0": "10.0.0.138",
+                "port1": "10.0.0.142",
+                "port2": "10.0.0.16"
+            },
+            "connections": null
+        }
+    }
+}
