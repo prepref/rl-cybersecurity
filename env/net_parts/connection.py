@@ -1,4 +1,4 @@
-from device import device
+from net_parts.device import device
 
 
 class connection():

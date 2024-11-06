@@ -1,5 +1,5 @@
 from enum import Enum
 
 class Device_type(Enum):
-    switch: 0
-    worker: 1
+    switch = 0
+    worker = 1
