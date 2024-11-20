@@ -20,7 +20,10 @@ def get_action_type(action):
 
 
 class TrafficEnv(gym.Env):
-    def __init__(self, proxy_host='127.0.0.1', proxy_port=8090, server_host='127.0.0.1', server_port=8080, mode='train', load_threshold=0.75, hazard_index=1):
+    def __init__(self, proxy_host='127.0.0.1', proxy_port=8090,
+                    server_host='127.0.0.1', server_port=8080,
+                    mode='train', load_threshold=0.75, hazard_index=1):
+
         super(TrafficEnv).__init__()
         self.mode = mode
 
@@ -28,10 +31,11 @@ class TrafficEnv(gym.Env):
         self.hazard_index = hazard_index
         self.request_buffer =[]
 
-        self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(5,), dtype=np.float32)
+        self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(7,), dtype=np.float32)
         self.action_space = spaces.Discrete(6)  # предварительно
 
-        self.state = np.zeros(5, dtype=np.float32)
+        self.state_data = np.zeros(5, dtype=np.float32)
+        self.state_server = np.zeros(2, dtype=np.float32)
         self.time_step = 0
         self.max_time_step = 1000
 
@@ -59,20 +63,30 @@ class TrafficEnv(gym.Env):
             if data:
                 self.current_data = data
                 self.last_message_time[addr[0]] += current_time - self.last_message_time[addr[0]] 
-                self.state = self.features.extract(data.decode('utf-8'), self.last_message_time[addr[0]])
+                self.state_data = self.features.extract(data.decode('utf-8'), self.last_message_time[addr[0]], addr[0])
             else:
-                self.state = None
+                self.state_data = np.zeros(5, np.float32)
+            
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.connect((self.server_host, self.server_port))
+            s.sendall(b'get state')
+
+            data = s.recv(1024)
+            cpu_usage, memory_usage = data.decode('utf-8').split(' ')
+
+            self.state_server = np.array([np.float32(cpu_usage), np.float32(memory_usage)])
         
-        return self.state
+        return np.hstack((self.state_data, self.state_server))
 
     def reset(self):
-        self.state = np.zeros(5, dtype=np.float32)
+        self.state_data = np.zeros(5, dtype=np.float32)
+        self.state_server = np.zeros(2, dtype=np.float32)
         self.time_step = 0
-        return self.state
-
+        return np.hstack((self.state_data, self.state_server))
+    
     def step(self, action):
         self.time_step += 1
-
+        print(self.current_data)
         if action == 0:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_s:
                 server_s.connect((self.server_host, self.server_port))
@@ -172,7 +186,6 @@ class TrafficEnv(gym.Env):
                 else:
                     return ValueError(f"Uncnown action: {action}")
 
-    
 e = TrafficEnv()
 
 for i in range(10):

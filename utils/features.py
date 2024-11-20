@@ -1,5 +1,3 @@
-import re
-import socket
 import ipinfo
 
 import numpy as np
@@ -10,12 +8,6 @@ class Features:
     def __init__(self):
         self.user_groups = defaultdict(list)
         self.ip_blocks = defaultdict(int)
-
-    def _get_ip_from_domain(self, domain):
-        try: 
-            return socket.gethostbyname(domain)
-        except socket.gaierror:
-            return None
     
     def _get_netmask_from_ip(self, ip_address):
         token = '142af0e70792ef'
@@ -24,11 +16,12 @@ class Features:
         netmask = details.asn['route'].split('/')[0]
         return netmask
 
-    def extract(self, message, interval):
-        host = re.search(r'Host: (\S+)', message)
-        domain = host.group(1)
-        ip_address = self._get_ip_from_domain(domain=domain)
-        netmask = self._get_netmask_from_ip(ip_address=ip_address)
+    def extract(self, message, interval, ip_address):
+        if ':' in ip_address:
+            ip_address = ip_address.split(':')[0]
+
+        # netmask = self._get_netmask_from_ip(ip_address=ip_address)
+        netmask = '127.0.0.1'
 
         self.user_groups[ip_address].append((netmask, interval, message))
 
@@ -42,6 +35,6 @@ class Features:
         dev = (np.sum(user_intervals) - ave) / ((len(user_intervals) - 1) if len(user_intervals) -1  != 0 else 1)
         num_m = len(self.user_groups[ip_address])
 
-        print(f'Domain: {domain}; ip: {ip_address}; mask: {netmask}')
+        print(f'Ip: {ip_address}; mask: {netmask}')
 
         return np.array([bytes_m, bytes_b, ave, dev, num_m])
