@@ -69,7 +69,7 @@ class TrafficEnv(gym.Env):
             
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.connect((self.server_host, self.server_port))
-            s.sendall(b'get state')
+            s.sendall(b'get state for features')
 
             data = s.recv(1024)
             cpu_usage, memory_usage = data.decode('utf-8').split(' ')
@@ -99,10 +99,29 @@ class TrafficEnv(gym.Env):
 
         return None, reward, done, info
 
+    def get_server_usage(self):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.connect((self.server_host, self.server_port))
+            s.sendall(b'get server usage')
+
+            data = s.recv(1024)
+            cpu_usage, memory_usage, connection_usage = data.decode('utf-8').split(' ')
+
+        return cpu_usage, memory_usage, connection_usage
+
+    def get_max_server_usage(self):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.connect((self.server_host, self.server_port))
+            s.sendall(b'get max server usage')
+
+            data = s.recv(1024)
+            max_cpu_usage, max_memory_usagem, max_connection_usage = data.decode('utf-8').split(' ')
+
+        return max_cpu_usage, max_memory_usagem, max_connection_usage
 
     def get_reward(self, action):
-        cpu_usage, memory_usage, connection_usage = get_server_usage()
-        max_cpu_usage, max_memory_usage, max_connection_usage = get_max_server_usage()
+        cpu_usage, memory_usage, connection_usage = self.get_server_usage()
+        max_cpu_usage, max_memory_usage, max_connection_usage = self.get_max_server_usage()
         cpu_percent_usage, memory_percent_usage, connection_percent_usage = cpu_usage/max_cpu_usage, memory_usage/max_memory_usage, connection_usage/max_connection_usage
         max_load = max(cpu_percent_usage, memory_percent_usage, connection_percent_usage)
         is_heavy_loaded = max_load >= self.load_threshold
