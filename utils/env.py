@@ -45,17 +45,22 @@ class TrafficEnv(gym.Env):
         self.server_port = server_port
 
         self.features = features.Features()
-        self.proxy_s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.proxy_s.bind((self.proxy_host, self.proxy_port))
-        self.proxy_s.listen()
+
+        self.proxy_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.proxy_server.bind((self.proxy_host, self.proxy_port))
+        self.proxy_server.listen()
+
+        self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.server.connect((self.server_host, self.server_port))
 
         self.current_data = None
         self.last_message_time = defaultdict(int)
 
         logging.info(f"Прокси-сервер запущен на {self.proxy_host}:{self.proxy_port}")
+        logging.info(f"Агент подключен к серверу по адресу {self.server_host}:{self.server_port}")
 
     def get_state(self):
-        conn, addr = self.proxy_s.accept()
+        conn, addr = self.proxy_server.accept()
         with conn:
             logging.info(f'Подключение от {addr}')
             data = conn.recv(1024)
@@ -67,14 +72,10 @@ class TrafficEnv(gym.Env):
             else:
                 self.state_data = np.zeros(5, np.float32)
             
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.connect((self.server_host, self.server_port))
-            s.sendall(b'get state for features')
-
-            data = s.recv(1024)
-            cpu_usage, memory_usage = data.decode('utf-8').split(' ')
-
-            self.state_server = np.array([np.float32(cpu_usage), np.float32(memory_usage)])
+        self.server.sendall(b'get state for features')
+        data = self.server.recv(1024)
+        cpu_usage, memory_usage = data.decode('utf-8').split(' ')
+        self.state_server = np.array([np.float32(cpu_usage), np.float32(memory_usage)])
         
         return np.hstack((self.state_data, self.state_server))
 
@@ -100,30 +101,15 @@ class TrafficEnv(gym.Env):
         return None, reward, done, info
 
     def get_server_usage(self):
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.connect((self.server_host, self.server_port))
-            s.sendall(b'get server usage')
+        self.server.sendall(b'get server usage')
+        data = self.server.recv(1024)
+        cpu_usage, memory_usage, = data.decode('utf-8').split(' ')
 
-            data = s.recv(1024)
-            cpu_usage, memory_usage, connection_usage = data.decode('utf-8').split(' ')
-
-        return cpu_usage, memory_usage, connection_usage
-
-    def get_max_server_usage(self):
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.connect((self.server_host, self.server_port))
-            s.sendall(b'get max server usage')
-
-            data = s.recv(1024)
-            max_cpu_usage, max_memory_usagem, max_connection_usage = data.decode('utf-8').split(' ')
-
-        return max_cpu_usage, max_memory_usagem, max_connection_usage
+        return cpu_usage/100, memory_usage/100
 
     def get_reward(self, action):
         cpu_usage, memory_usage, connection_usage = self.get_server_usage()
-        max_cpu_usage, max_memory_usage, max_connection_usage = self.get_max_server_usage()
-        cpu_percent_usage, memory_percent_usage, connection_percent_usage = cpu_usage/max_cpu_usage, memory_usage/max_memory_usage, connection_usage/max_connection_usage
-        max_load = max(cpu_percent_usage, memory_percent_usage, connection_percent_usage)
+        max_load = max(cpu_usage, memory_usage, connection_usage)
         is_heavy_loaded = max_load >= self.load_threshold
         
         action_type = get_action_type(action)
