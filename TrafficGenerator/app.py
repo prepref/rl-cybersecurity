@@ -1,32 +1,30 @@
 from flask import Flask, render_template, request, Response
+import generator
 import threading
 import requests
 import time
 import queue
-import logging
-
 app = Flask(__name__)
 thread_worker = None
 q = queue.Queue()
+delay = 1
 SWITCHER = True
-
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
-
 def generate_request(queue: queue.Queue):
-    while True:
-        data = queue.get()
-        if data is None:
-            break
-        url = data["address"]
-        message = data["message"]
-        delay = data['delay']
-        while SWITCHER:
-            try:
-                requests.post("http://" + url, timeout=1, data=message)
-            except requests.exceptions.RequestException as e:
-                pass
-            time.sleep(int(delay) / 1000)
-        queue.task_done()
+    data = queue.get()
+    url = data["address"]
+    message = data["message"]
+    delay = data['delay']
+    global SWITCHER
+    while SWITCHER:
+        try:
+            requests.post("http://"+url,timeout=0.0000000001, data=message)
+            print('Request sended.')
+        except Exception: 
+            pass
+        time.sleep(int(delay) / 1000)
+        
+with app.app_context():
+    thread_worker = threading.Thread(target=generate_request, args=(q,))
 
 @app.route("/")
 def main():
@@ -34,10 +32,10 @@ def main():
 
 @app.route('/start', methods=['POST'])
 def start():
-    global SWITCHER, thread_worker
+    global SWITCHER, args, thread_worker
     SWITCHER = True
     content = request.get_json()
-    q.put({"address": content["address"], "message": content["message"], "delay": content["delay"]})
+    q.put({"address": content["address"],"message": content["message"], "delay": content["delay"]})
     thread_worker = threading.Thread(target=generate_request, args=(q,))
     thread_worker.start()
     return Response(status=200)
@@ -46,11 +44,7 @@ def start():
 def stop():
     global SWITCHER
     SWITCHER = False
-    q.put(None)  # Signal the thread to stop
-    logging.info("Sent stop signal to thread worker.")
-    if thread_worker and thread_worker.is_alive():
-        thread_worker.join()
-        logging.info("Thread worker stopped.")
+    thread_worker.join()
     return Response(status=200)
 
 if __name__ == '__main__':

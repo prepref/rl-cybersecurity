@@ -1,83 +1,87 @@
 <!DOCTYPE html>
-<html>
-    <head>
-        <link rel="stylesheet" href="{{ url_for('static', filename='styles/style.css') }}">
-        <link rel="script" href="{{ url_for('static', filename='scripts/script.js') }}">
-    </head>
+<head>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles/style.css') }}">
+    <link rel="script" href="{{ url_for('static', filename='scripts/script.js') }}">
+</head>
 
-    <body>
-        <div>
-            <span>Address:</span>
-            <input type="text" id="address">
-        </div>
-        <div>
-            <span>Message:</span>
-            <input type="text" id="message">
-        </div>
-        <div>
-            <input type="range" id="delay" name="delay" min="10" max="1000" />
-        </div>
+<body>
+    <div>
+        <span>Address:</span>
+        <input type="text" id="address">
+    </div>
+    <div>
+        <span>Message:</span>
+        <input type="text" id="message">
+    </div>
+    <div>
+        <input type="range" id="delay" name="delay" min="10" max="1000" />
+    </div>
 
-        <label for="delay" id="delayValue">Delay 500ms</label>
+    <label for="delay" id="delayValue">Delay 500ms</label>
+    
+    <div>
+        <button id="startButton">Start</button>
+    </div>
+    <div>
+        <button id="stopButton" disabled>Stop</button>
+    </div>
+</body>
+
+<script>
+    function start(e){
+        document.getElementById("startButton").disabled = true;
+        document.getElementById("stopButton").disabled = false;
+        document.getElementById("delay").disabled = true;
+        const delay = document.getElementById("delay");
+        const address = document.getElementById("address");
+        const message = document.getElementById("message");
+        const strAddr = address.value;
+        const regex = /\d+\.\d+\.\d+\.\d+/;
+        console.log(strAddr)
+        console.log(regex.test(strAddr))
+        if (regex.test(strAddr) == true) {
+            fetch("http://localhost:9800/start", {
+            method: "POST",
+            body: JSON.stringify({
+                address: address.value,
+                delay: delay.value,
+                message: message.value
+            }),
+            headers: {
+                "Content-type": "application/json; charset=UTF-8"
+            }
+            });
+        }
+        else {
+            alert("IP address is WRONG. Check it!");
+        }
         
-        <div>
-            <button id="startButton">Start</button>
-        </div>
-        <div>
-            <button id="stopButton">Stop</button>
-        </div>
+    }
 
-        <script>
-            function start(e){
-                const delay = document.getElementById("delay");
-                const address = document.getElementById("address");
-                const message = document.getElementById("message");
-                const strAddr = address.value;
-                const regex = /^(\d{1,3}\.){3}\d{1,3}(:\d{1,5})?$/;
-                console.log(strAddr)
-                console.log(regex.test(strAddr))
-                if (regex.test(strAddr) == true) {
-                    fetch("http://192.168.0.104:9800/start", {
-                    method: "POST",
-                    body: JSON.stringify({
-                        address: address.value,
-                        delay: delay.value,
-                        message: message.value
-                    }),
-                    headers: {
-                        "Content-type": "application/json; charset=UTF-8"
-                    }
-                    });
-                }
-                else {
-                    alert("IP address is WRONG. Check it!");
-                }
-                
+    function stop(e){
+        document.getElementById("startButton").disabled = false;
+        document.getElementById("stopButton").disabled = true;
+        document.getElementById("delay").disabled = false;
+        fetch("http://localhost:9800/stop", {
+            method: "POST",
+            body: JSON.stringify({
+            }),
+            headers: {
+                "Content-type": "application/json; charset=UTF-8"
             }
+        });
+    }
     
-            function stop(e){
-                fetch("http://192.168.0.104:9800/stop", {
-                    method: "POST",
-                    body: JSON.stringify({
-                    }),
-                    headers: {
-                        "Content-type": "application/json; charset=UTF-8"
-                    }
-                });
-            }
-            
-            function changeValue(e){
-                label = document.getElementById("delayValue");
-                label.textContent = "Delay " + delayRange.value.toString() + " ms";
-            }
-    
-            const startButton = document.getElementById("startButton");
-            const stopButton = document.getElementById("stopButton");
-            const delayRange = document.getElementById("delay");
-            delayRange.addEventListener("input", changeValue)
-            startButton.addEventListener("click", start);
-            stopButton.addEventListener("click", stop);
-    
-        </script>
-    </body>
-</html>
+    function changeValue(e){
+        label = document.getElementById("delayValue");
+        label.textContent = "Delay " + delayRange.value.toString() + " ms";
+    }
+
+    const startButton = document.getElementById("startButton");
+    const stopButton = document.getElementById("stopButton");
+    const delayRange = document.getElementById("delay");
+    delayRange.addEventListener("input", changeValue)
+    startButton.addEventListener("click", start);
+    stopButton.addEventListener("click", stop);
+
+</script>
