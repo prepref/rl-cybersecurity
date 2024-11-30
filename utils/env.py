@@ -2,13 +2,15 @@ import socket
 import logging
 import features
 import time
+import pickle
 
 import numpy as np
 import gymnasium as gym
 
+from sklearn.cluster import KMeans
 from gymnasium import spaces
 from collections import defaultdict
-from utils.action_type import Action_type, Action
+from action_type import Action_type, Action
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
 
@@ -29,10 +31,12 @@ class TrafficEnv(gym.Env):
 
         self.load_threshold = load_threshold
         self.hazard_index = hazard_index
-        self.request_buffer =[]
+        self.request_buffer =[] # элемент массива (request, bool), true если пакет от нормального пользователя
+        self.blocked_ips = set()
+        self.blocked_ip_blocks = set()
 
         self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(7,), dtype=np.float32)
-        self.action_space = spaces.Discrete(6)  # предварительно
+        self.action_space = spaces.Discrete(4)
 
         self.state_data = np.zeros(5, dtype=np.float32)
         self.state_server = np.zeros(2, dtype=np.float32)
@@ -59,6 +63,7 @@ class TrafficEnv(gym.Env):
         logging.info(f"Прокси-сервер запущен на {self.proxy_host}:{self.proxy_port}")
         logging.info(f"Агент подключен к серверу по адресу {self.server_host}:{self.server_port}")
 
+
     def get_state(self):
         conn, addr = self.proxy_server.accept()
         with conn:
@@ -79,26 +84,41 @@ class TrafficEnv(gym.Env):
         
         return np.hstack((self.state_data, self.state_server))
 
+
     def reset(self):
         self.state_data = np.zeros(5, dtype=np.float32)
         self.state_server = np.zeros(2, dtype=np.float32)
         self.time_step = 0
         return np.hstack((self.state_data, self.state_server))
     
+
     def step(self, action):
         self.time_step += 1
         print(self.current_data)
-        if action == 0:
+        if action == Action.SERVER_RECIEVE_CURRENT:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_s:
                 server_s.connect((self.server_host, self.server_port))
                 server_s.sendall(self.current_data)
                 logging.info(f'Данные отправлены на сервер {self.server_host}:{self.server_port}')
 
-        reward = 1  # определить функцию, которая бы принимала вектор состояния и выдавала число
+        elif action == Action.SERVER_DROP_CURRENT:
+            pass #возможно стоит заменить на возврат ошибки
+
+        elif action == Action.SERVER_BLOCK_CURRENT_ADDRESS:
+            self.blocked_ips.add(request_source) #Нужно прокинуть адресс текущего запроса
+
+        elif action == Action.SERVER_BLOCK_CURRENT_ADDRESS_GROUP:
+            request_source_block = #добавить получение номера группы
+            self.blocked_ip_blocks.add(request_source_block)
+
+        reward = self.get_reward(action)
+        state = #Добавить получение нового состояния
         done = self.time_step >= self.max_time_step
         info = {}
+        
 
-        return None, reward, done, info
+        return state, reward, done, info
+
 
     def get_server_usage(self):
         self.server.sendall(b'get server usage')
@@ -107,9 +127,10 @@ class TrafficEnv(gym.Env):
 
         return cpu_usage/100, memory_usage/100
 
+
     def get_reward(self, action):
-        cpu_usage, memory_usage, connection_usage = self.get_server_usage()
-        max_load = max(cpu_usage, memory_usage, connection_usage)
+        cpu_usage, memory_usage = self.get_server_usage()
+        max_load = max(cpu_usage, memory_usage)
         is_heavy_loaded = max_load >= self.load_threshold
         
         action_type = get_action_type(action)
