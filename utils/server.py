@@ -19,13 +19,16 @@ def handle_client(conn, addr):
         data = conn.recv(1024)
         if not data:
             break
+        
+        data = data.decode('utf-8')
+        print(data)
 
-        logging.info(f"Получен пакет:\n{data.decode('utf-8')}")
+        logging.info(f"Получен пакет:\n{data}")
 
         if 'get' in data:
-            if data.decode('utf-8').strip() == 'get state for features':
+            if data.strip() == 'get state for features':
                 state = f'{CPU_USAGE._value.get()} {MEMORY_USAGE._value.get()}'
-            elif data.decode('utf-8').strip() == 'get server usage':
+            elif data.strip() == 'get server usage':
                 state = f'{psutil.cpu_percent(interval=1)} {psutil.virtual_memory().percent}'
                 
             conn.sendall(str(state).encode('utf-8'))
@@ -37,6 +40,7 @@ def handle_client(conn, addr):
 def start(host='127.0.0.1', port=8080, memory_limit = 512 * 1024 * 1024):
     process = psutil.Process()
     process.rlimit(psutil.RLIMIT_AS, (memory_limit, memory_limit))
+    process.cpu_affinity([0,1])
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind((host, port))
@@ -48,5 +52,5 @@ def start(host='127.0.0.1', port=8080, memory_limit = 512 * 1024 * 1024):
             client_thread = threading.Thread(target=handle_client, args=(conn, addr))
             client_thread.start()
 
-if __name__ == "__main__":
-    start()
+
+start()

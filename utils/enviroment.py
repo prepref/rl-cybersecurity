@@ -1,25 +1,19 @@
 import socket
 import logging
-import features
 import time
 import pickle
 
 import numpy as np
 import gymnasium as gym
 
-from sklearn.cluster import KMeans
+# from sklearn.cluster import KMeans
 from gymnasium import spaces
 from collections import defaultdict
+
+import features
 from action_type import Action_type, Action
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
-
-def get_action_type(action):
-    if action == Action.SERVER_BLOCK_CURRENT_ADDRESS_GROUP:
-        return Action_type.MULTILPE_TARGET_ACTION
-    else:
-        return Action_type.SINGLE_TARGET_ACTION
-
 
 class TrafficEnv(gym.Env):
     def __init__(self, proxy_host='127.0.0.1', proxy_port=8090,
@@ -66,14 +60,19 @@ class TrafficEnv(gym.Env):
 
     def get_state(self):
         conn, addr = self.proxy_server.accept()
+
         with conn:
             logging.info(f'Подключение от {addr}')
-            data = conn.recv(1024)
-            current_time = time.time() 
+            data = conn.recv(1024).decode('utf-8')
+            current_time = time.time()
+            if self.mode=='simulation':
+                addr = data.split('-')[-1]
+                print(addr)
+            
             if data:
                 self.current_data = data
                 self.last_message_time[addr[0]] += current_time - self.last_message_time[addr[0]] 
-                self.state_data = self.features.extract(data.decode('utf-8'), self.last_message_time[addr[0]], addr[0])
+                self.state_data = self.features.extract(data, self.last_message_time[addr[0]], addr[0])
             else:
                 self.state_data = np.zeros(5, np.float32)
             
@@ -96,28 +95,26 @@ class TrafficEnv(gym.Env):
         self.time_step += 1
         print(self.current_data)
         if action == Action.SERVER_RECIEVE_CURRENT:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_s:
-                server_s.connect((self.server_host, self.server_port))
-                server_s.sendall(self.current_data)
-                logging.info(f'Данные отправлены на сервер {self.server_host}:{self.server_port}')
+            self.server.sendall(self.current_data)
+            logging.info(f'Данные отправлены на сервер {self.server_host}:{self.server_port}')
 
         elif action == Action.SERVER_DROP_CURRENT:
             pass #возможно стоит заменить на возврат ошибки
 
-        elif action == Action.SERVER_BLOCK_CURRENT_ADDRESS:
-            self.blocked_ips.add(request_source) #Нужно прокинуть адресс текущего запроса
+        # elif action == Action.SERVER_BLOCK_CURRENT_ADDRESS:
+        #     self.blocked_ips.add(request_source) #Нужно прокинуть адресс текущего запроса
 
-        elif action == Action.SERVER_BLOCK_CURRENT_ADDRESS_GROUP:
-            request_source_block = #добавить получение номера группы
-            self.blocked_ip_blocks.add(request_source_block)
+        # elif action == Action.SERVER_BLOCK_CURRENT_ADDRESS_GROUP:
+        #     request_source_block = #добавить получение номера группы
+        #     self.blocked_ip_blocks.add(request_source_block)
 
         reward = self.get_reward(action)
-        state = #Добавить получение нового состояния
+        # state = #Добавить получение нового состояния
         done = self.time_step >= self.max_time_step
         info = {}
         
 
-        return state, reward, done, info
+        return None, reward, done, info
 
 
     def get_server_usage(self):
@@ -125,19 +122,25 @@ class TrafficEnv(gym.Env):
         data = self.server.recv(1024)
         cpu_usage, memory_usage, = data.decode('utf-8').split(' ')
 
-        return cpu_usage/100, memory_usage/100
-
+        return np.float32(cpu_usage)/100, np.float32(memory_usage)/100
+    
+    @staticmethod
+    def get_action_type(action):
+        if action == Action.SERVER_BLOCK_CURRENT_ADDRESS_GROUP:
+            return Action_type.MULTILPE_TARGET_ACTION
+        else:
+            return Action_type.SINGLE_TARGET_ACTION
 
     def get_reward(self, action):
         cpu_usage, memory_usage = self.get_server_usage()
         max_load = max(cpu_usage, memory_usage)
         is_heavy_loaded = max_load >= self.load_threshold
         
-        action_type = get_action_type(action)
+        action_type = self.get_action_type(action)
         reward = 0
         
         if is_heavy_loaded:
-            if action_type == Action_type.SINGLE_REQUEST_ACTION:
+            if action_type == Action_type.SINGLE_TARGET_ACTION:
                 if self.request_buffer[0][1] == True and action == Action.SERVER_RECIEVE_CURRENT: #True negative
                     return reward
                 
@@ -175,7 +178,7 @@ class TrafficEnv(gym.Env):
                     return ValueError(f"Uncnown action: {action}")
         
         else:
-            if action_type == Action_type.SINGLE_REQUEST_ACTION:
+            if action_type == Action_type.SINGLE_TARGET_ACTION:
                 if self.request_buffer[0][1] == True and action == Action.SERVER_RECIEVE_CURRENT: #True negative
                     return reward
                 
@@ -211,9 +214,8 @@ class TrafficEnv(gym.Env):
 
                 else:
                     return ValueError(f"Uncnown action: {action}")
+                
+env = TrafficEnv(mode='simulation')
 
-e = TrafficEnv()
-
-for i in range(10):
-    print(e.get_state())
-    print(e.step(0))
+while True:
+    env.get_state()

@@ -1,12 +1,14 @@
-from utils import server, env
+from utils import enviroment, server, message_generator
 
 def main():
-    server.start_http_server(8000)
     server.start()
 
-    e = env.TrafficEnv()
+    env = enviroment.TrafficEnv()
 
-    
+    message_generator.start()
+
+    print(env.get_state())
+    print(env.step(0))
 
 if __name__ == '__main__':
     main()
