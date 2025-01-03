@@ -9,15 +9,15 @@ class Features:
         self.user_groups = defaultdict(list)
         self.ip_blocks = defaultdict(int)
     
-    def _get_netmask_from_ip(self, ip_address):
+    def get_netmask_from_ip(self, ip_address):
         ip_parts = ip_address.split('.')
-        return ip_parts[:-1]
+        return '.'.join(ip_parts[:-1])
 
     def extract(self, message, interval, ip_address):
         if ':' in ip_address:
             ip_address = ip_address.split(':')[0]
 
-        netmask = self._get_netmask_from_ip(ip_address=ip_address)
+        netmask = self.get_netmask_from_ip(ip_address=ip_address)
 
         self.user_groups[ip_address].append((netmask, interval, message))
 

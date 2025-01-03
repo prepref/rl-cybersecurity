@@ -1,12 +1,12 @@
 import socket
 import logging
 import time
-import pickle
+import queue
+import tqdm
 
 import numpy as np
 import gymnasium as gym
 
-# from sklearn.cluster import KMeans
 from gymnasium import spaces
 from collections import defaultdict
 
@@ -25,7 +25,8 @@ class TrafficEnv(gym.Env):
 
         self.load_threshold = load_threshold
         self.hazard_index = hazard_index
-        self.request_buffer =[] # элемент массива (request, bool), true если пакет от нормального пользователя
+        self.request_buffer = [] # элемент массива (request, bool), true если пакет от нормального пользователя
+        self.adresses_queue = queue.Queue() # для получения (addr, is_user) из get_state
         self.blocked_ips = set()
         self.blocked_ip_blocks = set()
 
@@ -66,7 +67,8 @@ class TrafficEnv(gym.Env):
             data = conn.recv(1024).decode('utf-8')
             current_time = time.time()
             if self.mode=='simulation':
-                addr = data.split('-')[-1]
+                data, addr, is_user = data.split('@@')
+                self.adresses_queue.put((addr, is_user))
                 print(addr)
             
             if data:
@@ -88,33 +90,44 @@ class TrafficEnv(gym.Env):
         self.state_data = np.zeros(5, dtype=np.float32)
         self.state_server = np.zeros(2, dtype=np.float32)
         self.time_step = 0
+
+        for _ in tqdm(range(100)):
+            v = self.get_state()
+            addr, is_user = self.adresses_queue.get()
+            self.request_buffer.append((addr, v, bool(is_user)))
+        
+        print(f'Shape of request_buffer: {len(self.request_buffer)}')
+
         return np.hstack((self.state_data, self.state_server))
     
 
     def step(self, action):
         self.time_step += 1
         print(self.current_data)
+        
+        addr,_,is_user = self.request_buffer.pop(0)
+        
         if action == Action.SERVER_RECIEVE_CURRENT:
             self.server.sendall(self.current_data)
             logging.info(f'Данные отправлены на сервер {self.server_host}:{self.server_port}')
 
         elif action == Action.SERVER_DROP_CURRENT:
-            pass #возможно стоит заменить на возврат ошибки
+            pass
 
-        # elif action == Action.SERVER_BLOCK_CURRENT_ADDRESS:
-        #     self.blocked_ips.add(request_source) #Нужно прокинуть адресс текущего запроса
+        elif action == Action.SERVER_BLOCK_CURRENT_ADDRESS:
+            self.blocked_ips.add(addr)
 
-        # elif action == Action.SERVER_BLOCK_CURRENT_ADDRESS_GROUP:
-        #     request_source_block = #добавить получение номера группы
-        #     self.blocked_ip_blocks.add(request_source_block)
+        elif action == Action.SERVER_BLOCK_CURRENT_ADDRESS_GROUP:
+            request_source_block = self.features.get_netmask_from_ip(addr)
+            self.blocked_ip_blocks.add(request_source_block)
 
-        reward = self.get_reward(action)
-        # state = #Добавить получение нового состояния
+        reward = self.get_reward(action, addr, is_user)
+        state = self.request_buffer[0]
         done = self.time_step >= self.max_time_step
         info = {}
         
 
-        return None, reward, done, info
+        return state, reward, done, info
 
 
     def get_server_usage(self):
@@ -131,7 +144,7 @@ class TrafficEnv(gym.Env):
         else:
             return Action_type.SINGLE_TARGET_ACTION
 
-    def get_reward(self, action):
+    def get_reward(self, action, addr, is_user):
         cpu_usage, memory_usage = self.get_server_usage()
         max_load = max(cpu_usage, memory_usage)
         is_heavy_loaded = max_load >= self.load_threshold
@@ -141,18 +154,18 @@ class TrafficEnv(gym.Env):
         
         if is_heavy_loaded:
             if action_type == Action_type.SINGLE_TARGET_ACTION:
-                if self.request_buffer[0][1] == True and action == Action.SERVER_RECIEVE_CURRENT: #True negative
+                if is_user == True and action == Action.SERVER_RECIEVE_CURRENT: #True negative
                     return reward
                 
-                elif self.request_buffer[0][1] == True and (action == Action.SERVER_DROP_CURRENT or action == Action.SERVER_BLOCK_CURRENT_ADDRESS): #False Positive
+                elif is_user == True and (action == Action.SERVER_DROP_CURRENT or action == Action.SERVER_BLOCK_CURRENT_ADDRESS): #False Positive
                     reward = -2/(max_load / self.load_threshold * self.hazard_index)
                     return reward
                 
-                elif self.request_buffer[0][1] == False and action == Action.SERVER_RECIEVE_CURRENT: #False Negative
+                elif is_user == False and action == Action.SERVER_RECIEVE_CURRENT: #False Negative
                     reward = -(max_load / self.load_threshold * self.hazard_index)
                     return reward
                 
-                elif self.request_buffer[0][1] == False and (action == Action.SERVER_DROP_CURRENT or action == Action.SERVER_BLOCK_CURRENT_ADDRESS): #True Positive
+                elif is_user == False and (action == Action.SERVER_DROP_CURRENT or action == Action.SERVER_BLOCK_CURRENT_ADDRESS): #True Positive
                     reward = max_load / self.load_threshold * self.hazard_index
                     return reward
                 
@@ -162,10 +175,10 @@ class TrafficEnv(gym.Env):
             elif action_type == Action_type.MULTILPE_TARGET_ACTION:
                 if action == Action.SERVER_BLOCK_CURRENT_ADDRESS_GROUP:
                     fp, tp = 0, 0
-                    target_adress_group = self.request_buffer[0][0].address_group
+                    target_adress_group = self.features.get_netmask_from_ip(addr)
                     for i in range(1, len(self.request_buffer)):
-                        if self.request_buffer[i][0].address_group == target_adress_group:
-                            if self.request_buffer[i][1] == True:
+                        if self.features.get_netmask_from_ip(self.request_buffer[i][0]) == target_adress_group:
+                            if self.request_buffer[i][2] == True:
                                 fp+=1
 
                             else:
@@ -179,18 +192,18 @@ class TrafficEnv(gym.Env):
         
         else:
             if action_type == Action_type.SINGLE_TARGET_ACTION:
-                if self.request_buffer[0][1] == True and action == Action.SERVER_RECIEVE_CURRENT: #True negative
+                if is_user == True and action == Action.SERVER_RECIEVE_CURRENT: #True negative
                     return reward
                 
-                elif self.request_buffer[0][1] == True and (action == Action.SERVER_DROP_CURRENT or action == Action.SERVER_BLOCK_CURRENT_ADDRESS): #False Positive
+                elif is_user == True and (action == Action.SERVER_DROP_CURRENT or action == Action.SERVER_BLOCK_CURRENT_ADDRESS): #False Positive
                     reward = -2
                     return reward
                 
-                elif self.request_buffer[0][1] == False and action == Action.SERVER_RECIEVE_CURRENT: #False Negative
+                elif is_user == False and action == Action.SERVER_RECIEVE_CURRENT: #False Negative
                     reward = -1
                     return reward
                 
-                elif self.request_buffer[0][1] == False and (action == Action.SERVER_DROP_CURRENT or action == Action.SERVER_BLOCK_CURRENT_ADDRESS): #True Positive
+                elif is_user == False and (action == Action.SERVER_DROP_CURRENT or action == Action.SERVER_BLOCK_CURRENT_ADDRESS): #True Positive
                     reward = 1
                     return reward
                 
@@ -200,10 +213,10 @@ class TrafficEnv(gym.Env):
             elif action_type == Action_type.MULTILPE_TARGET_ACTION:
                 if action == Action.SERVER_BLOCK_CURRENT_ADDRESS_GROUP:
                     fp, tp = 0, 0
-                    target_adress_group = self.request_buffer[0][0].address_group
+                    target_adress_group = self.features.get_netmask_from_ip(addr)
                     for i in range(1, len(self.request_buffer)):
-                        if self.request_buffer[i][0].address_group == target_adress_group:
-                            if self.request_buffer[i][1] == True:
+                        if self.features.get_netmask_from_ip(self.request_buffer[i][0]) == target_adress_group:
+                            if self.request_buffer[i][2] == True:
                                 fp+=1
 
                             else:
@@ -216,6 +229,4 @@ class TrafficEnv(gym.Env):
                     return ValueError(f"Uncnown action: {action}")
                 
 env = TrafficEnv(mode='simulation')
-
-while True:
-    env.get_state()
+env.reset()
