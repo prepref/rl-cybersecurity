@@ -80,20 +80,26 @@ if __name__=="__main__":
 
 
     # Uncomment to train
-    agent, ed_scores = train_agent(n_episodes=1200)
-    agent.is_learning = False
-    test_scores = test_agent(agent)
-    ed_indexes = np.arange(len(ed_scores)).tolist()
-    test_indexes = np.arange(len(test_scores)).tolist()
+#    agent, ed_scores = train_agent(n_episodes=100)
+#    agent.is_learning = False
+#    test_scores = test_agent(agent)
+#    ed_indexes = np.arange(len(ed_scores)).tolist()
+#    test_indexes = np.arange(len(test_scores)).tolist()
 
-    plt.plot(ed_indexes, ed_scores)
-    plt.xlabel("Эпизоды обучения")
-    plt.ylabel("Награды")
-    plt.title("Результаты работы агента в процессе обучения")
-    plt.show()
+#    plt.plot(ed_indexes, ed_scores)
+#    plt.xlabel("Эпизоды обучения")
+#    plt.ylabel("Награды")
+#    plt.title("Результаты работы агента в процессе обучения")
+#    plt.show(block=True)
 
-    plt.plot(test_indexes, test_scores)
-    plt.xlabel("Эпизоды тестирования")
-    plt.ylabel("Награды")
-    plt.title("Результаты работы агента в процессе тестирования")
-    plt.show()
+#    plt.plot(test_indexes, test_scores)
+#    plt.xlabel("Эпизоды тестирования")
+#    plt.ylabel("Награды")
+#    plt.title("Результаты работы агента в процессе тестирования")
+#    plt.show(block=True)
+
+
+    env = HTTPServerEnv(buffer_size=100, load_threshold=0.8, hazard_index=1)
+    temp = env.reset()
+    print(temp)
+    print(env.step(2))

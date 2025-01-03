@@ -5,7 +5,7 @@ import ipaddress
 from collections import deque, defaultdict
 
 class HTTPServerEnv(gym.Env):
-    def __init__(self, buffer_size=100, user_ips=None, load_threshold=0.8, hazard_index=1):
+    def __init__(self, buffer_size=100, user_ips=None, load_threshold=0.8, hazard_index=1, user_message_sizes=None):
         super(HTTPServerEnv, self).__init__()
         
         # Параметры буфера и пользовательских адресов
@@ -18,6 +18,12 @@ class HTTPServerEnv(gym.Env):
         # Параметры загрузки и индекса опасности
         self.load_threshold = load_threshold  # Порог загрузки
         self.hazard_index = hazard_index  # Индекс опасности
+        
+        # Пул фиксированных размеров сообщений для пользовательских адресов
+        if user_message_sizes:
+            self.user_message_sizes = user_message_sizes
+        else:
+            self.user_message_sizes = [100, 200, 300, 400, 500]  # Пример фиксированных размеров
         
         # Определение пространства состояний
         self.observation_space = spaces.Box(
@@ -50,7 +56,6 @@ class HTTPServerEnv(gym.Env):
         
         # Буфер запросов
         self.request_buffer = deque(maxlen=self.buffer_size)
-        self.fill_buffer()  # Заполнение буфера начальными запросами
 
     def reset(self):
         # Сброс среды в начальное состояние
@@ -65,21 +70,22 @@ class HTTPServerEnv(gym.Env):
         })
         self.group_traffic = defaultdict(int)
         self.request_buffer.clear()
-        self.fill_buffer()  # Заполнение буфера начальными запросами
-        return self.state
+        self.fill_buffer()  # Первичное заполнение буфера
+        return self.get_next_state()
 
     def step(self, action):
         # Симуляция обработки запроса
         done = False
         info = {}
         
-        # Получение текущего запроса из буфера
-        if len(self.request_buffer) == 0:
-            self.fill_buffer()  # Если буфер пуст, заполняем его
-        source_ip, is_user_request = self.request_buffer[0]  # Берем первый элемент без удаления
+        # Получение текущего запроса из буфера с удалением
+        source_ip, is_user_request = self.request_buffer.popleft()
         
         # Обновление состояния
-        message_size = np.random.randint(100, 1000000)
+        if is_user_request:
+            message_size = np.random.choice(self.user_message_sizes)  # Фиксированный размер для пользователей
+        else:
+            message_size = np.random.randint(100, 1000000)  # Случайный размер для вредоносных адресов
         self.state[0] = message_size  # Размер сообщения
         self.state[7] = int(source_ip.split('.')[-1])  # Последний октет IPv4-адреса (для простоты)
         
@@ -113,17 +119,21 @@ class HTTPServerEnv(gym.Env):
         self.state[6] = np.random.uniform(0, 1)  # Memory load
         
         # Подсчет награды
-        reward = self.get_reward(action, is_user_request, group)
+        reward = self.get_reward(action, is_user_request, source_ip, group)
+        
+        # Добавление нового запроса в буфер
+        self.add_request_to_buffer()
         
         # Проверка условия завершения
         self.current_message_count += 1
         if self.current_message_count >= self.max_messages:
             done = True
         
-        return self.state, reward, done, info
+        # Возвращаем новое состояние (нулевой элемент буфера без удаления)
+        next_state = self.get_next_state()
+        return next_state, reward, done, info
 
-
-    def get_reward(self, action, is_user_request, group):
+    def get_reward(self, action, is_user_request, source_ip, group):
         # Подсчет награды в зависимости от действия
         max_load = max(self.state[5], self.state[6])  # Максимум загрузки CPU и памяти
         
@@ -131,38 +141,28 @@ class HTTPServerEnv(gym.Env):
             if action in [2, 3]:  # Блокировка источника или группы
                 tp, fp = self.count_requests_in_buffer(group)
                 return (max_load / self.load_threshold * self.hazard_index) * tp - (2 / (max_load / self.load_threshold * self.hazard_index) * fp)
-            
             else:  # Действие влияет на 1 запрос
                 if is_user_request and action == 0:  # Приняли пользователя
                     return 0
-                
                 elif is_user_request and action in [1, 2]:  # Отклонили или заблокировали пользователя
                     return -2 / (max_load / self.load_threshold * self.hazard_index)
-                
                 elif not is_user_request and action == 0:  # Приняли атакующего
                     return -(max_load / self.load_threshold * self.hazard_index)
-                
                 elif not is_user_request and action in [1, 2]:  # Отклонили или заблокировали атакующего
                     return max_load / self.load_threshold * self.hazard_index
-                
         else:
             if action in [2, 3]:  # Блокировка источника или группы
                 tp, fp = self.count_requests_in_buffer(group)
                 return tp - 2 * fp
-            
             else:  # Действие влияет на 1 запрос
                 if is_user_request and action == 0:  # Приняли пользователя
                     return 0
-                
                 elif is_user_request and action in [1, 2]:  # Отклонили или заблокировали пользователя
                     return -2
-                
                 elif not is_user_request and action == 0:  # Приняли атакующего
                     return -1
-                
                 elif not is_user_request and action in [1, 2]:  # Отклонили или заблокировали атакующего
                     return 1
-
 
     def count_requests_in_buffer(self, group):
         # Подсчет числа запросов от пользователей и атакующих в буфере
@@ -170,14 +170,11 @@ class HTTPServerEnv(gym.Env):
         fp = 0  # False Positives (запросы от атакующих)
         for ip, is_user_request in self.request_buffer:
             if self.get_source_group(ip) == group:
-
                 if is_user_request:
                     tp += 1
                 else:
                     fp += 1
-
         return tp, fp
-
 
     def generate_random_ip(self):
         # Генерация случайного IPv4-адреса, исключая специальные адреса
@@ -186,7 +183,6 @@ class HTTPServerEnv(gym.Env):
             if ip not in ["127.0.0.1", "0.0.0.0"]:
                 return ip
 
-
     def generate_random_ips(self, count):
         # Генерация списка случайных IPv4-адресов
         ips = set()
@@ -194,20 +190,38 @@ class HTTPServerEnv(gym.Env):
             ips.add(self.generate_random_ip())
         return list(ips)
 
-
     def get_source_group(self, source_ip):
         # Группировка по подсети /24
         ip = ipaddress.IPv4Address(source_ip)
         return str(ipaddress.IPv4Network(f"{ip}/24", strict=False).network_address)
 
-
     def fill_buffer(self):
-        # Заполнение буфера случайными запросами
+        # Первичное заполнение буфера
         while len(self.request_buffer) < self.buffer_size:
-            source_ip = self.generate_random_ip()
-            is_user_request = source_ip in self.user_ips
-            self.request_buffer.append((source_ip, is_user_request))
+            self.add_request_to_buffer()
 
+    def add_request_to_buffer(self):
+        # Добавление нового запроса в буфер
+        source_ip = self.generate_random_ip()
+        is_user_request = source_ip in self.user_ips
+        self.request_buffer.append((source_ip, is_user_request))
+
+    def get_next_state(self):
+        # Возвращает нулевой элемент буфера без удаления
+        if len(self.request_buffer) > 0:
+            source_ip, is_user_request = self.request_buffer[0]
+            return np.array([
+                self.state[0],  # Размер сообщения
+                self.state[1],  # Размер трафика
+                self.state[2],  # Среднее время между сообщениями
+                self.state[3],  # Среднее абсолютное отклонение
+                self.state[4],  # Число сообщений
+                self.state[5],  # CPU load
+                self.state[6],  # Memory load
+                int(source_ip.split('.')[-1])  # Последний октет IPv4-адреса
+            ], dtype=np.float32)
+        else:
+            return np.zeros(8, dtype=np.float32)
 
     def render(self, mode='human'):
         pass
