@@ -11,7 +11,8 @@ if __name__=="__main__":
     def train_agent(n_episodes=2000):
         print(f"Training a DDQN agent on {n_episodes} episodes.")
         env = HTTPServerEnv(buffer_size=100, load_threshold=0.8, hazard_index=1)
-        agent = DoubleQAgent(gamma=0.99, epsilon=1.0, epsilon_dec=0.995, lr=0.001, mem_size=200000, batch_size=128, epsilon_end=0.01)
+        agent = DoubleQAgent(observation_space_shape=env.observation_space.shape[0], action_space_n=env.action_space.n, 
+                             gamma=0.99, epsilon=1.0, epsilon_dec=0.995, lr=0.001, mem_size=200000, batch_size=128, epsilon_end=0.01)
             
         scores = []
         eps_history = []
@@ -97,9 +98,3 @@ if __name__=="__main__":
 #    plt.ylabel("Награды")
 #    plt.title("Результаты работы агента в процессе тестирования")
 #    plt.show(block=True)
-
-
-    env = HTTPServerEnv(buffer_size=100, load_threshold=0.8, hazard_index=1)
-    temp = env.reset()
-    print(temp)
-    print(env.step(2))

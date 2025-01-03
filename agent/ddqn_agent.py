@@ -79,7 +79,7 @@ class Agent(object):
         
     
 class DoubleQAgent(Agent):
-    def __init__(self, gamma=0.99, epsilon=1.0, batch_size=128, lr=0.001,
+    def __init__(self, observation_space_shape, action_space_n, gamma=0.99, epsilon=1.0, batch_size=128, lr=0.001,
                  epsilon_dec=0.996,  epsilon_end=0.01,
                  mem_size=1000000, replace_q_target = 100,
                  is_learning=True):
@@ -89,8 +89,8 @@ class DoubleQAgent(Agent):
              mem_size=mem_size, is_learning=is_learning)
 
         self.replace_q_target = replace_q_target
-        self.q_func = QNN(8, 4, 42).to(device) # ИЗМЕНИТЬ РАЗМЕРЫ СЛОЕВ В СООТВЕТСТВИИ С ПРОСТРАНСТВАМИ СОСТОЯНИЙ И ДЕЙСТВИЙ!
-        self.q_func_target = QNN(8, 4, 42).to(device)
+        self.q_func = QNN(observation_space_shape, action_space_n, 42).to(device)
+        self.q_func_target = QNN(observation_space_shape, action_space_n, 42).to(device)
         self.optimizer = optim.Adam(self.q_func.parameters(), lr=lr)
 
     
