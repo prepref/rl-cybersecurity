@@ -40,7 +40,7 @@ def handle_client(conn, addr):
 def start(host='127.0.0.1', port=8080, memory_limit = 512 * 1024 * 1024):
     process = psutil.Process()
     process.rlimit(psutil.RLIMIT_AS, (memory_limit, memory_limit))
-    process.cpu_affinity([0,1])
+    process.cpu_affinity([0])
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind((host, port))
@@ -49,8 +49,7 @@ def start(host='127.0.0.1', port=8080, memory_limit = 512 * 1024 * 1024):
 
         while True:
             conn, addr = s.accept()
-            client_thread = threading.Thread(target=handle_client, args=(conn, addr))
-            client_thread.start()
+            handle_client(conn, addr)
 
 
 start()
