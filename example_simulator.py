@@ -1,4 +1,4 @@
-from sim_env import HTTPServerEnv
+from simulator.sim_env import HTTPServerEnv
 from agent.ddqn_agent import DoubleQAgent
 import time
 import numpy as np
