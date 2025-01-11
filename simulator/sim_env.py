@@ -64,7 +64,7 @@ class HTTPServerEnv(gym.Env):
         self.group_traffic = defaultdict(int)
         self.request_buffer.clear()
         self.fill_buffer()  # Первичное заполнение буфера
-        return self.get_next_state()
+        return self.request_buffer[0][0]
 
     def step(self, action):
         # Симуляция обработки запроса
@@ -131,7 +131,7 @@ class HTTPServerEnv(gym.Env):
             done = True
         
         # Возвращаем новое состояние (нулевой элемент буфера без удаления)
-        next_state = self.get_next_state()
+        next_state = self.request_buffer[0][0]
         return next_state, reward, done, info
 
     def get_reward(self, action, is_user_request, source_ip, group, cpu_load, memory_load):
@@ -279,15 +279,6 @@ class HTTPServerEnv(gym.Env):
             (state, ip, is_user) for state, ip, is_user in self.request_buffer
             if ip not in self.blocked_ips and self.get_source_group(ip) not in self.blocked_groups
         )
-
-    def get_next_state(self):
-        # Возвращает нулевой элемент буфера без удаления
-        if len(self.request_buffer) > 0:
-            state, source_ip, is_user_request = self.request_buffer[0]
-            return state
-        else:
-            # Если буфер пуст, возвращаем нулевое состояние
-            return np.zeros(7, dtype=np.float32)
 
     def render(self, mode='human'):
         pass
