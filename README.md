@@ -10,4 +10,6 @@
 
 - Запуск файла `example_simulator.py`
 
+Файл `training_log_emulator.txt` содержит пример логов при обучение агента в эмуляторе.
+
 Визуализация: https://github.com/sinsvoegotca/ddos
